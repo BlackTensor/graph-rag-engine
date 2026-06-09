@@ -87,9 +87,11 @@ graphrag-discovery/
 ### M1 — Project Scaffold & Infra
 - [x] M1.1 — Init repo, `pyproject.toml`, ruff + pytest, `.gitignore`, `.env.example`
 > ✅ Done: git init + src/ package skeleton (ingest/graph/vector/retrieval/llm/eval), `pyproject.toml` (setuptools src-layout, ruff E/F/I, pytest pythonpath=src), `src/config.py` (dotenv-backed settings), `.env.example`, `.gitignore`, `tests/test_scaffold.py`. Verified: `ruff check .` clean, `pytest` 1 passed. Full `pip install -e ".[dev]"` (torch/ragas) left for user.
-- [ ] M1.2 — `docker-compose.yml` for Neo4j + Qdrant + Ollama; verify all containers come up healthy
+- [x] M1.2 — `docker-compose.yml` for Neo4j + Qdrant + Ollama; verify all containers come up healthy
+> ✅ Done: `docker-compose.yml` with Neo4j 5 (+APOC, ports 7474/7687), Qdrant (6333/6334), Ollama (11434), named volumes, healthchecks (neo4j cypher-shell, ollama `ollama list`). Verified: `docker compose up -d` → neo4j & ollama `(healthy)`, qdrant `/readyz` → 200. Qdrant has no in-container healthcheck (image lacks curl/wget); checked from host.
 - [ ] M1.3 — Connection smoke tests (ping Neo4j, Qdrant, Ollama; pull one Ollama model)
 - [ ] M1.4 — Write `README.md` skeleton + setup instructions
+> 📝 Reminder: README must note that runtime deps (torch via sentence-transformers, ragas) may lack wheels on Python 3.14 — recommend a Python 3.11/3.12 venv for `pip install -e ".[dev]"`.
 
 ### M2 — Data Collection
 - [ ] M2.1 — Pick exact source (arXiv metadata snapshot / Kaggle / HF dataset) and document the choice
@@ -182,6 +184,7 @@ graphrag-discovery/
 ## 9. Status Log
 > Append newest entries at the top. Format: `YYYY-MM-DD — what changed — next up`.
 
+- 2026-06-09 — M1.2 done: docker-compose (Neo4j+APOC, Qdrant, Ollama) with healthchecks + named volumes; all containers verified healthy (qdrant /readyz=200). — Next: M1.3 (connection smoke tests + pull an Ollama model).
 - 2026-06-09 — M1.1 done: repo scaffold (src/ skeleton, pyproject, ruff+pytest, config.py, .env.example, .gitignore). SDD skipped (CLAUDE.md serves as design doc). ruff/pytest green. — Next: M1.2 (docker-compose: Neo4j + Qdrant + Ollama).
 - 2026-06-08 — CLAUDE.md created. No code yet. — Next: SDD + M1.1.
 

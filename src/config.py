@@ -21,7 +21,7 @@ QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "papers")
 
 # --- Ollama ---
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:0.6b")  # smoke model; production pick = M8.3
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:0.6b")  # M8.3 pick: 3/3 bench, ~2x faster than 1.7b
 
 # --- Embeddings ---
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")

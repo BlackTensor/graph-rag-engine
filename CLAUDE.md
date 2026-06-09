@@ -103,7 +103,8 @@ graphrag-discovery/
 > ✅ Done: `src/ingest/audit.py` + `tests/test_audit.py`. Coverage over 5,847 works: paper_id 100% (0 dupes), title 100%, year 100%, **abstract 77.2%** (use title when missing), authors 99.5% (25,988 distinct), authorships-with-institution 82.0% (4,389 institutions), topics 99.9% (993 distinct). **CITES is sparse**: 270,302 ref edges but only **1.2% (3,282) are in-corpus** (~26% papers cite in-corpus, ~28% cited). Derivations for M3: strip URL→short id; reconstruct inverted-index abstracts (fallback to title); normalize institution display_names. See Open Questions for the CITES-density decision (M4).
 
 ### M3 — Data Cleaning
-- [ ] M3.1 — Dedupe (`drop_duplicates`), handle missing values
+- [x] M3.1 — Dedupe (`drop_duplicates`), handle missing values
+> ✅ Done: `src/ingest/clean.py` + `tests/test_clean.py`. Parses raw Works → normalized paper records, dedupes by paper_id (`drop_duplicates`), reconstructs inverted-index abstracts (falls back to title), keeps **in-corpus CITES only** (decision (a)). Out → `data/interim/papers_clean.jsonl` (5,847 papers; 0 dupes, 0 missing title, 1,334 abstracts filled from title, 69 papers w/ no valid author, 3,232 in-corpus CITES edges). pytest 11 passed.
 - [ ] M3.2 — Normalize entity names (e.g. "Open AI"/"openai" → "OpenAI") with a canonical-name map
 - [ ] M3.3 — Emit `data/processed/clean_papers.csv` + a short data-quality report
 
@@ -188,6 +189,7 @@ graphrag-discovery/
 ## 9. Status Log
 > Append newest entries at the top. Format: `YYYY-MM-DD — what changed — next up`.
 
+- 2026-06-09 — M3.1 done: src/ingest/clean.py dedupe + missing-value handling → data/interim/papers_clean.jsonl (5,847). CITES decision (a) adopted (in-corpus only). pytest 11 passed. — Next: M3.2 (normalize entity names via canonical-name map).
 - 2026-06-09 — M2.3 done: src/ingest/audit.py coverage report. All core fields well-covered EXCEPT in-corpus citations (1.2%, 3,282 edges) — flagged as Open Question for M4. pytest 8 passed. **M2 milestone complete.** — Next: M3.1 (dedupe + missing-value handling).
 - 2026-06-09 — M2.2 done: src/ingest/download.py (cached, cursor-paginated, retry) pulled 5,847 OpenAlex works → data/raw/openalex/works.jsonl (55MB) + manifest. pytest 6 passed. — Next: M2.3 (sanity-check schema: confirm/plan fields for paper/author/institution/topic/citations).
 - 2026-06-09 — M2.1 done: data source = OpenAlex, focused NLP subset (~5.8k), documented in docs/data-source.md; API + fields verified live. — Next: M2.2 (download script → data/raw/, cached).
@@ -202,4 +204,4 @@ graphrag-discovery/
 ## 10. Open Questions
 > Claude logs blockers/decisions needing the user here.
 
-- **[M4] CITES density is low.** Only 1.2% of references (3,282 edges) point within the 5,847-paper corpus; most references go to pre-2024 / sub-threshold papers. Decision needed before/at M4: (a) keep in-corpus CITES only (3,282 edges; lean on author/topic/institution multi-hop, which has 82–99% coverage), or (b) backfill externally-cited works as lightweight `Paper` stubs (id + optionally fetched title) to enrich citation-based multi-hop. Leaning (a) for v1 simplicity; revisit if the demo needs deeper citation chains.
+- **[RESOLVED 2026-06-09 → (a)] CITES density is low.** Only 1.2% of references point within the corpus. **Decision: keep in-corpus CITES only, no backfill** (user-approved). Implemented in M3.1 (`clean.py` filters references to the corpus id set; 3,232 edges after removing self/dupe). Multi-hop will lean on author/topic/institution relationships (82–99% coverage).

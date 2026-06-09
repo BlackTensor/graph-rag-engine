@@ -32,4 +32,5 @@ OPENALEX_MAILTO = os.getenv("OPENALEX_MAILTO", "shayanx13@gmail.com")  # polite 
 
 # --- Data paths ---
 DATA_RAW = os.getenv("DATA_RAW", "data/raw")
+DATA_INTERIM = os.getenv("DATA_INTERIM", "data/interim")
 DATA_PROCESSED = os.getenv("DATA_PROCESSED", "data/processed")

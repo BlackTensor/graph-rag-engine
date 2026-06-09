@@ -51,31 +51,38 @@
 
 ---
 
-## 3. Repository Layout (Target)
+## 3. Repository Layout (current — updated 2026-06-09)
+
+> `[Mx]` = task that created it · `(pending Mx)` = not built yet. Working dir is
+> `RAG Graph P`. Data files under `data/` are gitignored.
 
 ```
-graphrag-discovery/
+RAG Graph P/
 ├── CLAUDE.md                 # this file
-├── README.md
-├── docker-compose.yml        # neo4j + qdrant + ollama
-├── pyproject.toml
-├── .env.example
+├── README.md                 # [M1.4]
+├── docker-compose.yml        # neo4j + qdrant + ollama  [M1.2]
+├── pyproject.toml            # setuptools src-layout, ruff, pytest  [M1.1]
+├── .env.example              # [M1.1; +OpenAlex M2.2; +DATA_INTERIM M3.1]
+├── docs/
+│   └── data-source.md        # OpenAlex decision + fetch plan  [M2.1]
 ├── data/
-│   ├── raw/                  # downloaded datasets
-│   ├── interim/
-│   └── processed/            # clean_papers.csv
+│   ├── raw/openalex/         # works.jsonl (55MB) + manifest.json  [M2.2]
+│   ├── interim/              # papers_clean.jsonl [M3.1], papers_normalized.jsonl [M3.2]
+│   └── processed/            # clean_papers.csv  (pending M3.3)
 ├── src/
-│   ├── ingest/               # download + clean
-│   ├── graph/                # neo4j build + queries
-│   ├── vector/               # qdrant index + search
-│   ├── retrieval/            # hybrid + router (langgraph)
-│   ├── llm/                  # ollama wrapper
-│   └── eval/                 # ragas harness
+│   ├── config.py             # central settings (dotenv)  [M1.1]
+│   ├── health.py             # connectivity smoke checks  [M1.3]
+│   ├── ingest/               # download.py [M2.2], audit.py [M2.3], clean.py [M3.1], normalize.py [M3.2]
+│   ├── graph/                # neo4j build + queries  (pending M4)
+│   ├── vector/               # qdrant index + search  (pending M5)
+│   ├── retrieval/            # hybrid + router (langgraph)  (pending M7)
+│   ├── llm/                  # ollama wrapper  (pending M8)
+│   └── eval/                 # ragas harness  (pending M9)
 ├── eval/
-│   └── questions.jsonl       # 50 easy + 50 multi-hop
+│   └── questions.jsonl       # 50 easy + 50 multi-hop  (pending M9.1)
 ├── app/
-│   └── streamlit_app.py
-└── tests/
+│   └── streamlit_app.py      # (pending M10)
+└── tests/                    # scaffold, connections, download, audit, clean, normalize
 ```
 
 ---
@@ -155,9 +162,12 @@ graphrag-discovery/
 ---
 
 ## 5. Pre-Build Artifacts (Do First, Once)
-- [ ] SDD — Short Software Design Doc (1–2 pages): problem, architecture, data flow, decisions
-- [ ] This CLAUDE.md reviewed and agreed
-- [ ] Definition of Done agreed (see Section 6)
+- [x] SDD — Short Software Design Doc (1–2 pages): problem, architecture, data flow, decisions
+> ✅ Skipped by decision (2026-06-09): CLAUDE.md serves as the design doc for v1.
+- [x] This CLAUDE.md reviewed and agreed
+> ✅ Reviewed/agreed 2026-06-09; tech stack (§2) and CITES decision (§10) confirmed by user.
+- [x] Definition of Done agreed (see Section 6)
+> ✅ Agreed 2026-06-09 (Section 6 unchanged).
 
 ---
 

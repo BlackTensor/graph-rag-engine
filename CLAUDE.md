@@ -68,11 +68,11 @@ RAG Graph P/
 ├── data/
 │   ├── raw/openalex/         # works.jsonl (55MB) + manifest.json  [M2.2]
 │   ├── interim/              # papers_clean.jsonl [M3.1], papers_normalized.jsonl [M3.2]
-│   └── processed/            # clean_papers.csv  (pending M3.3)
+│   └── processed/            # clean_papers.csv + data_quality_report.md  [M3.3]
 ├── src/
 │   ├── config.py             # central settings (dotenv)  [M1.1]
 │   ├── health.py             # connectivity smoke checks  [M1.3]
-│   ├── ingest/               # download.py [M2.2], audit.py [M2.3], clean.py [M3.1], normalize.py [M3.2]
+│   ├── ingest/               # download.py [M2.2], audit.py [M2.3], clean.py [M3.1], normalize.py [M3.2], export.py [M3.3]
 │   ├── graph/                # neo4j build + queries  (pending M4)
 │   ├── vector/               # qdrant index + search  (pending M5)
 │   ├── retrieval/            # hybrid + router (langgraph)  (pending M7)
@@ -82,7 +82,7 @@ RAG Graph P/
 │   └── questions.jsonl       # 50 easy + 50 multi-hop  (pending M9.1)
 ├── app/
 │   └── streamlit_app.py      # (pending M10)
-└── tests/                    # scaffold, connections, download, audit, clean, normalize
+└── tests/                    # scaffold, connections, download, audit, clean, normalize, export
 ```
 
 ---
@@ -114,10 +114,12 @@ RAG Graph P/
 > ✅ Done: `src/ingest/clean.py` + `tests/test_clean.py`. Parses raw Works → normalized paper records, dedupes by paper_id (`drop_duplicates`), reconstructs inverted-index abstracts (falls back to title), keeps **in-corpus CITES only** (decision (a)). Out → `data/interim/papers_clean.jsonl` (5,847 papers; 0 dupes, 0 missing title, 1,334 abstracts filled from title, 69 papers w/ no valid author, 3,232 in-corpus CITES edges). pytest 11 passed.
 - [x] M3.2 — Normalize entity names (e.g. "Open AI"/"openai" → "OpenAI") with a canonical-name map
 > ✅ Done: `src/ingest/normalize.py` + `tests/test_normalize.py`. Strips trailing `(Country)` from institution names (recognized-country list, so campus tags like `(Beijing)` survive), applies `CANONICAL_NAME_MAP` (open ai→OpenAI extension point), and **merges ids only for pure country-suffix splits** (Google 5→1, Microsoft 8→1; ambiguous same-name like Northeastern University kept separate). In→`papers_clean.jsonl`, out→`data/interim/papers_normalized.jsonl`. Stats: 2,085 suffixes stripped, 32 orgs merged (4,338→4,281 inst ids), 21 canonical-map hits. pytest 15 passed.
-- [ ] M3.3 — Emit `data/processed/clean_papers.csv` + a short data-quality report
+- [x] M3.3 — Emit `data/processed/clean_papers.csv` + a short data-quality report
+> ✅ Done: `src/ingest/export.py` + `tests/test_export.py`. Flattens `papers_normalized.jsonl` → one-row-per-paper `data/processed/clean_papers.csv` (5,847 rows × 18 cols; nested authors/institutions/topics/refs joined with `" | "`, pandas-quoted so comma'd names round-trip) and writes `data/processed/data_quality_report.md`. Report highlights: title/year/cited_by 100%, real abstract 77.2%, ≥1 author 98.8%, ≥1 institution 86.7%, ≥1 topic 99.9%, ≥1 in-corpus cite 25.3%; 25,988 authors / 4,281 institutions / 993 topics / 3,232 CITES edges; years 2024–2026. pytest 18 passed, ruff clean. **M3 milestone complete.**
 
 ### M4 — Knowledge Graph (Neo4j)
-- [ ] M4.1 — Define node/edge schema + uniqueness constraints/indexes
+- [x] M4.1 — Define node/edge schema + uniqueness constraints/indexes
+> ✅ Done: `src/graph/schema.py` + `tests/test_schema.py`. Defines the model — nodes Paper(paper_id)/Author(author_id)/Institution(inst_id)/Topic(topic_id); edges (Paper)-[:AUTHORED_BY]->(Author), (Author)-[:WORKS_AT]->(Institution), (Paper)-[:STUDIES]->(Topic), (Paper)-[:CITES]->(Paper). Applies 4 idempotent uniqueness constraints (the MERGE keys for M4.2, each backed by a range index) + 6 property indexes (Paper.year/cited_by_count, Author/Institution/Topic.name, Topic.field) + a `paper_fulltext` index over title/abstract (NL→seed-node mapping for M6). CLI: `--apply` (default) / `--show` / `--drop` (schema-only, data untouched). Applied to live Neo4j and verified idempotent (re-run clean). pytest 5 passed (no-DB statement tests), ruff clean.
 - [ ] M4.2 — Ingestion script: rows → nodes (Paper/Author/Institution/Topic) + edges (AUTHORED_BY/WORKS_AT/STUDIES/CITES)
 - [ ] M4.3 — Verify counts (nodes, edges) and spot-check a few traversals in Neo4j Browser
 - [ ] M4.4 — Capture 2–3 graph screenshots for the LinkedIn post
@@ -200,6 +202,8 @@ RAG Graph P/
 ## 9. Status Log
 > Append newest entries at the top. Format: `YYYY-MM-DD — what changed — next up`.
 
+- 2026-06-09 — M4.1 done: src/graph/schema.py defines node/edge model + applies 4 uniqueness constraints + 6 property indexes + 1 fulltext index (idempotent, CLI --apply/--show/--drop). Applied to live Neo4j; pytest 5 passed. — Next: M4.2 (ingestion: rows → Paper/Author/Institution/Topic nodes + AUTHORED_BY/WORKS_AT/STUDIES/CITES edges).
+- 2026-06-09 — M3.3 done: src/ingest/export.py flattens papers_normalized.jsonl → data/processed/clean_papers.csv (5,847×18) + data_quality_report.md. pytest 18 passed. **M3 milestone complete.** — Next: M4.1 (Neo4j node/edge schema + uniqueness constraints/indexes).
 - 2026-06-09 — M3.2 done: src/ingest/normalize.py (country-suffix strip + canonical map + safe country-split merge) → data/interim/papers_normalized.jsonl. 32 orgs merged, ambiguous names preserved. pytest 15 passed. — Next: M3.3 (emit data/processed/clean_papers.csv + data-quality report).
 - 2026-06-09 — M3.1 done: src/ingest/clean.py dedupe + missing-value handling → data/interim/papers_clean.jsonl (5,847). CITES decision (a) adopted (in-corpus only). pytest 11 passed. — Next: M3.2 (normalize entity names via canonical-name map).
 - 2026-06-09 — M2.3 done: src/ingest/audit.py coverage report. All core fields well-covered EXCEPT in-corpus citations (1.2%, 3,282 edges) — flagged as Open Question for M4. pytest 8 passed. **M2 milestone complete.** — Next: M3.1 (dedupe + missing-value handling).

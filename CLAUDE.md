@@ -68,13 +68,13 @@ RAG Graph P/
 ├── data/
 │   ├── raw/openalex/         # works.jsonl (55MB) + manifest.json  [M2.2]
 │   ├── interim/              # papers_clean.jsonl [M3.1], papers_normalized.jsonl [M3.2]
-│   └── processed/            # clean_papers.csv + data_quality_report.md  [M3.3]
+│   └── processed/            # clean_papers.csv + data_quality_report.md [M3.3]; chunks.jsonl + embeddings.npy [M5.1]
 ├── src/
 │   ├── config.py             # central settings (dotenv)  [M1.1]
 │   ├── health.py             # connectivity smoke checks  [M1.3]
 │   ├── ingest/               # download.py [M2.2], audit.py [M2.3], clean.py [M3.1], normalize.py [M3.2], export.py [M3.3]
 │   ├── graph/                # neo4j build + queries  (pending M4)
-│   ├── vector/               # qdrant index + search  (pending M5)
+│   ├── vector/               # embed.py [M5.1]; qdrant index + search (pending M5.2)
 │   ├── retrieval/            # hybrid + router (langgraph)  (pending M7)
 │   ├── llm/                  # ollama wrapper  (pending M8)
 │   └── eval/                 # ragas harness  (pending M9)
@@ -128,7 +128,8 @@ RAG Graph P/
 > ✅ Done: screenshots captured manually from Neo4j Browser (http://localhost:7474) using the Cypher printed by `src/graph/verify.py` (schema viz, transformer neighbourhood, topic→institutions, citation subgraph). **M4 milestone complete.**
 
 ### M5 — Vector RAG Baseline
-- [ ] M5.1 — Chunk papers (title+abstract) and embed with bge-small
+- [x] M5.1 — Chunk papers (title+abstract) and embed with bge-small
+> ✅ Done: `src/vector/embed.py` + `tests/test_embed.py`. Pure word-window chunker (`title`\n\n`abstract`, max 256 words / 32 overlap; short abstracts → 1 chunk) + bge-small (`BAAI/bge-small-en-v1.5`, 384-dim) via sentence-transformers, L2-normalized so Qdrant cosine==dot (M5.2). Reads `papers_normalized.jsonl`, writes row-aligned `data/processed/chunks.jsonl` (chunk_id/paper_id/chunk_index + metadata + text) and `embeddings.npy`. Built live: **5,847 papers → 6,776 chunks** (929 from 200+-word multi-chunk papers) → vectors `(6776, 384)` float32, all norms 1.0, chunks↔vectors aligned 1:1. CLI: `--limit`/`--no-embed`/`--max-words`/`--overlap`/`--batch-size`. pytest 8 passed (chunking logic; embedding exercised at runtime), ruff clean.
 - [ ] M5.2 — Index into Qdrant; build similarity-search function
 - [ ] M5.3 — Wrap as a baseline `vector_rag(query)` that returns context + LLM answer
 - [ ] M5.4 — Confirm baseline works end-to-end on a simple question
@@ -205,6 +206,7 @@ RAG Graph P/
 ## 9. Status Log
 > Append newest entries at the top. Format: `YYYY-MM-DD — what changed — next up`.
 
+- 2026-06-09 — M5.1 done: src/vector/embed.py chunks title+abstract (word-window, 256/32) and embeds with bge-small (384-dim, L2-normalized) → data/processed/chunks.jsonl + embeddings.npy. Built: 5,847 papers → 6,776 chunks → vectors (6776, 384), aligned 1:1. pytest 8 passed (38 total). — Next: M5.2 (index chunks+vectors into Qdrant; build similarity-search function).
 - 2026-06-09 — M4.4 done (manual): captured Neo4j Browser screenshots for the LinkedIn post using verify.py's Cypher. **M4 milestone complete.** — Next: M5.1 (chunk papers title+abstract, embed with bge-small).
 - 2026-06-09 — M4.3 done: src/graph/verify.py independently recomputes expected counts from JSONL and diffs vs. live graph — all 8 node/edge counts match; integrity clean (0 dup/self-cite/title-less); spot-check traversals OK; prints Browser Cypher for M4.4. pytest 3 passed. — Next: M4.4 (manual: capture 2–3 Neo4j Browser screenshots for the LinkedIn post), then M5.1 (chunk+embed papers with bge-small).
 - 2026-06-09 — M4.2 done: src/graph/build.py ingests papers_normalized.jsonl → Neo4j (batched UNWIND+MERGE, idempotent). Counts: 5,847 papers / 25,988 authors / 4,281 insts / 993 topics; 30,613 AUTHORED_BY / 28,739 WORKS_AT / 15,949 STUDIES / 3,232 CITES. pytest 4 passed. — Next: M4.3 (verify counts + spot-check traversals in Neo4j Browser).

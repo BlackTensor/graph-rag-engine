@@ -1,49 +1,37 @@
-"""Baseline vector-RAG pipeline: retrieve -> ground -> answer (M5.3).
+"""Baseline vector-RAG pipeline: retrieve -> ground -> answer (M5.3, M8.2).
 
 `vector_rag(query)` is the traditional-RAG baseline the Graph-RAG engine has to
 beat on multi-hop questions (CLAUDE.md North Star). It:
 
   1. retrieves the top-k chunks from Qdrant (M5.2 `search`),
-  2. builds a context-grounded prompt (answer ONLY from the passages), and
-  3. asks the local Ollama model to write the answer.
+  2. renders them as numbered passages, and
+  3. asks the shared LLM writer (`llm/client.py`) for an answer grounded ONLY on
+     that context.
 
 It returns the answer *and* the retrieved context, so the demo (M10) and eval
 (M9) can show what the model was actually given.
 
-The LLM call here is deliberately minimal — the reusable Ollama wrapper and the
-hardened "answer only from context" template are M8, which will replace
-`generate()` and rewire both pipelines through one writer (M8.2). Keeping it
-local for now lets the baseline run end-to-end without pre-building M8.
+As of M8.2 the LLM call goes through the one reusable writer in `llm/client.py`:
+the same model, decoding, and strict "answer only from context" template used by
+the hybrid pipeline (`retrieval/pipeline.py`) and the graph compare glue
+(`graph/compare.py`). The ONLY thing that differs between this baseline and
+Graph-RAG is the retrieved context — which is exactly the contrast the demo
+makes.
 
     python src/vector/rag.py "What is the Transformer architecture?"
     python src/vector/rag.py --k 8 "Which papers study retrieval-augmented generation?"
 
-Uses: src/vector/search.py (M5.2), Ollama (config.OLLAMA_MODEL).
+Uses: src/vector/search.py (M5.2), src/llm/client.py (M8.1).
 """
 
 from __future__ import annotations
 
 import os
-import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import config  # noqa: E402
+from llm import client as llm_client  # noqa: E402
 from vector import search  # noqa: E402
-
-SYSTEM_PROMPT = (
-    "You are a research-paper assistant. Answer the question using ONLY the "
-    "numbered context passages below. If the context does not contain the answer, "
-    "say you don't know — do not use outside knowledge. Be concise and refer to "
-    "paper titles where helpful."
-)
-
-# qwen3 and other reasoning models may emit a <think>...</think> trace; strip it.
-_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
-
-
-def _strip_think(text: str) -> str:
-    return _THINK_RE.sub("", text).strip()
 
 
 def format_context(contexts: list[dict]) -> str:
@@ -56,39 +44,17 @@ def format_context(contexts: list[dict]) -> str:
     return "\n\n".join(blocks)
 
 
-def build_prompt(query: str, contexts: list[dict]) -> str:
-    """Assemble the grounded user prompt (context passages + question)."""
-    ctx = format_context(contexts) if contexts else "(no context retrieved)"
-    return f"Context passages:\n{ctx}\n\nQuestion: {query}\n\nAnswer:"
-
-
-def generate(prompt: str, model: str | None = None, host: str | None = None,
-             system: str = SYSTEM_PROMPT) -> str:
-    """Minimal Ollama chat call (temperature 0); reasoning traces stripped."""
-    import ollama
-
-    client = ollama.Client(host=host or config.OLLAMA_HOST)
-    resp = client.chat(
-        model=model or config.OLLAMA_MODEL,
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": prompt},
-        ],
-        options={"temperature": 0},
-    )
-    return _strip_think(resp.message.content)
-
-
 def vector_rag(query: str, k: int = 5, client=None, model: str | None = None,
                host: str | None = None) -> dict:
     """Baseline vector RAG: retrieve -> ground -> answer.
 
     Returns {query, answer, contexts} where contexts are the retrieved chunks
-    (payload + score) that grounded the answer.
+    (payload + score) that grounded the answer. `client` is an optional Qdrant
+    client (the LLM writer is the shared `llm/client.py`).
     """
     contexts = search.search(query, k=k, client=client)
-    prompt = build_prompt(query, contexts)
-    answer = generate(prompt, model=model, host=host)
+    context = format_context(contexts)
+    answer = llm_client.answer_from_context(query, context, model=model, host=host)
     return {"query": query, "answer": answer, "contexts": contexts}
 
 

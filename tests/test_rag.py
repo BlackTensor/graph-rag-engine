@@ -1,21 +1,12 @@
-"""Tests for the baseline vector-RAG pipeline (M5.3).
+"""Tests for the baseline vector-RAG pipeline (M5.3, M8.2).
 
-Prompt assembly, reasoning-trace stripping, and the retrieve->ground->answer
-wiring are covered with pure logic / monkeypatching (no Qdrant or Ollama). The
-live end-to-end run is M5.4.
+Passage rendering and the retrieve->ground->answer wiring are covered with pure
+logic / monkeypatching (no Qdrant or Ollama). As of M8.2 the LLM call is the
+shared writer in `llm/client.py`; here we assert vector_rag threads the
+retrieved passages into that writer. The live end-to-end run is M5.4.
 """
 
 from vector import rag
-
-
-def test_strip_think_removes_reasoning_trace():
-    raw = "<think>let me reason about this</think>The answer is 42."
-    assert rag._strip_think(raw) == "The answer is 42."
-
-
-def test_strip_think_handles_multiline_and_no_trace():
-    assert rag._strip_think("<think>\na\nb\n</think>  hello ") == "hello"
-    assert rag._strip_think("plain answer") == "plain answer"
 
 
 def test_format_context_numbers_passages():
@@ -29,25 +20,7 @@ def test_format_context_numbers_passages():
     assert "[2] Paper B\nbeta" in ctx
 
 
-def test_build_prompt_grounds_on_context_and_question():
-    prompt = rag.build_prompt("What is X?", [{"title": "T", "text": "body"}])
-    assert "Context passages:" in prompt
-    assert "[1] T\nbody" in prompt
-    assert "Question: What is X?" in prompt
-
-
-def test_build_prompt_handles_empty_context():
-    prompt = rag.build_prompt("Q?", [])
-    assert "(no context retrieved)" in prompt
-
-
-def test_system_prompt_constrains_to_context():
-    # The baseline must instruct the model not to use outside knowledge.
-    assert "ONLY" in rag.SYSTEM_PROMPT
-    assert "don't know" in rag.SYSTEM_PROMPT
-
-
-def test_vector_rag_wires_retrieval_prompt_and_generation(monkeypatch):
+def test_vector_rag_wires_retrieval_into_shared_writer(monkeypatch):
     hits = [
         {"title": "Attention Is All You Need", "text": "transformer", "score": 0.9,
          "paper_id": "W1", "chunk_index": 0},
@@ -56,16 +29,19 @@ def test_vector_rag_wires_retrieval_prompt_and_generation(monkeypatch):
 
     monkeypatch.setattr(rag.search, "search", lambda query, k, client=None: hits)
 
-    def fake_generate(prompt, model=None, host=None):
-        captured["prompt"] = prompt
+    def fake_answer(query, context, model=None, host=None):
+        captured["query"] = query
+        captured["context"] = context
         return "Grounded answer."
 
-    monkeypatch.setattr(rag, "generate", fake_generate)
+    # M8.2: vector_rag writes through llm/client.py, not a local generate().
+    monkeypatch.setattr(rag.llm_client, "answer_from_context", fake_answer)
 
     result = rag.vector_rag("What is the Transformer?", k=3)
     assert result["query"] == "What is the Transformer?"
     assert result["answer"] == "Grounded answer."
     assert result["contexts"] is hits
-    # the retrieved chunk text must have reached the prompt the LLM saw
-    assert "transformer" in captured["prompt"]
-    assert "What is the Transformer?" in captured["prompt"]
+    # the retrieved chunk text must have reached the context the writer saw
+    assert "transformer" in captured["context"]
+    assert "Attention Is All You Need" in captured["context"]
+    assert captured["query"] == "What is the Transformer?"

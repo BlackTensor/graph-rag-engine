@@ -14,7 +14,7 @@ from retrieval import pipeline
 
 # --- wiring (no live services) -----------------------------------------------
 
-def test_answer_threads_context_into_prompt_and_returns_provenance(monkeypatch):
+def test_answer_threads_context_into_writer_and_returns_provenance(monkeypatch):
     captured = {}
 
     def fake_route(query):
@@ -28,20 +28,22 @@ def test_answer_threads_context_into_prompt_and_returns_provenance(monkeypatch):
             "graph_result": {"template": "collaborating_institutions", "rows": []},
         }
 
-    def fake_generate(prompt, model=None, host=None, system=pipeline.SYSTEM_PROMPT):
-        captured["prompt"] = prompt
-        captured["system"] = system
+    def fake_answer_from_context(query, context, model=None, host=None):
+        captured["query"] = query
+        captured["context"] = context
         return "Mostly the Hong Kong universities."
 
     monkeypatch.setattr(pipeline.router, "route", fake_route)
-    monkeypatch.setattr(pipeline.rag, "generate", fake_generate)
+    # M8.2: the answer is written by the shared llm/client.py writer.
+    monkeypatch.setattr(
+        pipeline.llm_client, "answer_from_context", fake_answer_from_context
+    )
 
     result = pipeline.answer("Which institutions collaborate with Tsinghua University?")
 
-    # The merged context was grounded into the prompt with the unified system prompt.
-    assert "Knowledge-graph facts:" in captured["prompt"]
-    assert "Question: Which institutions collaborate" in captured["prompt"]
-    assert captured["system"] is pipeline.SYSTEM_PROMPT
+    # The merged context was handed to the shared writer.
+    assert "Knowledge-graph facts:" in captured["context"]
+    assert captured["query"].startswith("Which institutions collaborate")
     # Answer + provenance threaded through.
     assert result["answer"] == "Mostly the Hong Kong universities."
     assert result["route"] == "graph"
@@ -63,16 +65,13 @@ def test_answer_surfaces_fallback_flag(monkeypatch):
         }
 
     monkeypatch.setattr(pipeline.router, "route", fake_route)
-    monkeypatch.setattr(pipeline.rag, "generate", lambda *a, **k: "answer")
+    monkeypatch.setattr(
+        pipeline.llm_client, "answer_from_context", lambda *a, **k: "answer"
+    )
 
     result = pipeline.answer("Who collaborates with Hogwarts University?")
     assert result["fellback"] is True
     assert result["executed"][-1] == "vector(fallback)"
-
-
-def test_build_prompt_contains_context_and_question():
-    p = pipeline.build_prompt("What is X?", "some context")
-    assert "some context" in p and "Question: What is X?" in p
 
 
 # --- live end-to-end (skips without the stack) -------------------------------

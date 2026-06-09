@@ -14,13 +14,14 @@ good the embedding is: the answer simply isn't in the text. Graph-RAG walks
 
 `graph_rag(query)` mirrors `vector_rag(query)` (M5.3): retrieve -> ground ->
 answer, but the retriever is `graph_retrieve` (M6.2) and the context is the
-structured traversal result. The LLM call is the same minimal `generate()` the
-baseline uses; M7 (router) + M8 (unified writer) replace this glue later.
+structured traversal result. As of M8.2 both sides write through the one shared
+LLM wrapper (`llm/client.py`) with the same model, decoding, and strict template
+— so the side-by-side contrast is purely about *retrieval*, not the prompt.
 
     python src/graph/compare.py                       # run the default demo question
     python src/graph/compare.py "Who collaborates with Google?"
 
-Uses: graph.retrieve (M6.2), vector.rag (M5.3).
+Uses: graph.retrieve (M6.2), vector.rag (M5.3), llm.client (M8.1).
 """
 
 from __future__ import annotations
@@ -30,23 +31,12 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from graph import retrieve  # noqa: E402
+from llm import client as llm_client  # noqa: E402
 from vector import rag  # noqa: E402
 
 # A genuinely multi-hop, relational question. The answer is an aggregation over
 # co-authorship across institutions — nothing a single abstract chunk contains.
 DEMO_QUESTION = "Which institutions collaborate most with Tsinghua University?"
-
-GRAPH_SYSTEM_PROMPT = (
-    "You are a research-graph assistant. Answer the question using ONLY the "
-    "structured graph results below (each line is a real path found in the "
-    "knowledge graph). If the results are empty, say you don't know. Be concise "
-    "and report the ranked entities with their counts."
-)
-
-
-def build_graph_prompt(query: str, context: str) -> str:
-    """Assemble the grounded prompt from a graph_retrieve `context` block."""
-    return f"Graph results:\n{context}\n\nQuestion: {query}\n\nAnswer:"
 
 
 def graph_rag(
@@ -61,9 +51,8 @@ def graph_rag(
     Returns the full `graph_retrieve` result plus the LLM `answer`.
     """
     result = retrieve.graph_retrieve(query, session=session, limit=limit)
-    prompt = build_graph_prompt(query, result["context"])
-    result["answer"] = rag.generate(
-        prompt, model=model, host=host, system=GRAPH_SYSTEM_PROMPT
+    result["answer"] = llm_client.answer_from_context(
+        query, result["context"], model=model, host=host
     )
     return result
 

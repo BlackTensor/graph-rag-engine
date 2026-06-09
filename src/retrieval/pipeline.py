@@ -12,11 +12,13 @@ provenance the demo (M10) and eval (M9) need:
       └─ ground + generate            # answer ONLY from the merged context
       └─ {query, answer, route, reason, context, passages, graph_result, ...}
 
-The LLM call here is the same minimal `rag.generate()` the baselines use — M8
-replaces it with a hardened, reusable Ollama wrapper and makes it *the* writer
-for every pipeline (M8.2). What M7.3 locks in is the **wiring**: any question,
-routed and answered through one call, grounded on the merged graph+vector
-context (never outside knowledge).
+As of M8.2 the answer is written by the one shared LLM wrapper in
+`llm/client.py` — the same model, decoding, and strict "answer only from
+context" template the vector baseline (`vector/rag.py`) and the graph compare
+glue (`graph/compare.py`) use. The merged context may carry knowledge-graph
+facts (precise relationships/rankings) and/or document passages; the template
+handles both. Every question is routed and answered through this single call,
+grounded on the merged graph+vector context (never outside knowledge).
 
     python src/retrieval/pipeline.py "Which institutions collaborate most with Tsinghua University?"
     python src/retrieval/pipeline.py "What is the Transformer architecture?"
@@ -30,26 +32,8 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from llm import client as llm_client  # noqa: E402
 from retrieval import router  # noqa: E402
-from vector import rag  # noqa: E402
-
-# Unified answer-writer prompt: the merged context may carry knowledge-graph
-# facts (precise relationships/rankings) and/or document passages (title+abstract).
-SYSTEM_PROMPT = (
-    "You are a research assistant for an AI-research-papers knowledge base. Answer "
-    "the question using ONLY the context below. The context may contain "
-    "knowledge-graph facts (exact relationships, affiliations, citations, and "
-    "ranked counts) and/or document passages (a paper's title and abstract). For "
-    "questions about who works with or at whom, who cites whom, or which "
-    "entities rank highest, rely on the graph facts and report the ranked items "
-    "with their counts. If the context does not contain the answer, say you don't "
-    "know — do not use outside knowledge. Be concise."
-)
-
-
-def build_prompt(query: str, context: str) -> str:
-    """Assemble the grounded prompt from the router's merged context block."""
-    return f"Context:\n{context}\n\nQuestion: {query}\n\nAnswer:"
 
 
 def answer(query: str, model: str | None = None, host: str | None = None) -> dict:
@@ -60,9 +44,8 @@ def answer(query: str, model: str | None = None, host: str | None = None) -> dic
     was grounded on, the deduped passages, and the raw graph traversal result.
     """
     state = router.route(query)
-    context = state.get("merged_context", "(no context retrieved)")
-    prompt = build_prompt(query, context)
-    text = rag.generate(prompt, model=model, host=host, system=SYSTEM_PROMPT)
+    context = state.get("merged_context", "")
+    text = llm_client.answer_from_context(query, context, model=model, host=host)
     return {
         "query": query,
         "answer": text,

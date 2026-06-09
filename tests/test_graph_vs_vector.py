@@ -20,19 +20,7 @@ from vector import search
 
 # --- pure wiring --------------------------------------------------------------
 
-def test_build_graph_prompt_includes_context_and_question():
-    prompt = compare.build_graph_prompt("Who collaborates with X?", "  1. institution=Y")
-    assert "Graph results:" in prompt
-    assert "institution=Y" in prompt
-    assert "Question: Who collaborates with X?" in prompt
-
-
-def test_graph_system_prompt_constrains_to_graph_results():
-    assert "ONLY" in compare.GRAPH_SYSTEM_PROMPT
-    assert "don't know" in compare.GRAPH_SYSTEM_PROMPT
-
-
-def test_graph_rag_wires_retrieve_to_generate(monkeypatch):
+def test_graph_rag_wires_retrieve_into_shared_writer(monkeypatch):
     retrieved = {
         "query": "Q", "seed_type": "institution", "seed_name": "Tsinghua University",
         "template": "collaborating_institutions",
@@ -47,19 +35,22 @@ def test_graph_rag_wires_retrieve_to_generate(monkeypatch):
         lambda query, session=None, limit=15: dict(retrieved, query=query),
     )
 
-    def fake_generate(prompt, model=None, host=None, system=None):
-        captured["prompt"] = prompt
-        captured["system"] = system
+    def fake_answer_from_context(query, context, model=None, host=None):
+        captured["query"] = query
+        captured["context"] = context
         return "Top collaborator: University of Hong Kong (14 papers)."
 
-    monkeypatch.setattr(compare.rag, "generate", fake_generate)
+    # M8.2: graph_rag writes through the shared llm/client.py writer.
+    monkeypatch.setattr(
+        compare.llm_client, "answer_from_context", fake_answer_from_context
+    )
 
     result = compare.graph_rag("Who collaborates with Tsinghua University?")
     assert result["template"] == "collaborating_institutions"
     assert result["answer"].startswith("Top collaborator")
-    # the traversal context must have reached the prompt + the graph system prompt used
-    assert "collaborating_institutions" in captured["prompt"]
-    assert captured["system"] is compare.GRAPH_SYSTEM_PROMPT
+    # the traversal context must have reached the writer
+    assert "collaborating_institutions" in captured["context"]
+    assert captured["query"] == "Who collaborates with Tsinghua University?"
 
 
 # --- live contrast (skips without Neo4j + Qdrant) -----------------------------

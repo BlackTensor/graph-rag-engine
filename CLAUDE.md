@@ -120,7 +120,8 @@ RAG Graph P/
 ### M4 — Knowledge Graph (Neo4j)
 - [x] M4.1 — Define node/edge schema + uniqueness constraints/indexes
 > ✅ Done: `src/graph/schema.py` + `tests/test_schema.py`. Defines the model — nodes Paper(paper_id)/Author(author_id)/Institution(inst_id)/Topic(topic_id); edges (Paper)-[:AUTHORED_BY]->(Author), (Author)-[:WORKS_AT]->(Institution), (Paper)-[:STUDIES]->(Topic), (Paper)-[:CITES]->(Paper). Applies 4 idempotent uniqueness constraints (the MERGE keys for M4.2, each backed by a range index) + 6 property indexes (Paper.year/cited_by_count, Author/Institution/Topic.name, Topic.field) + a `paper_fulltext` index over title/abstract (NL→seed-node mapping for M6). CLI: `--apply` (default) / `--show` / `--drop` (schema-only, data untouched). Applied to live Neo4j and verified idempotent (re-run clean). pytest 5 passed (no-DB statement tests), ruff clean.
-- [ ] M4.2 — Ingestion script: rows → nodes (Paper/Author/Institution/Topic) + edges (AUTHORED_BY/WORKS_AT/STUDIES/CITES)
+- [x] M4.2 — Ingestion script: rows → nodes (Paper/Author/Institution/Topic) + edges (AUTHORED_BY/WORKS_AT/STUDIES/CITES)
+> ✅ Done: `src/graph/build.py` + `tests/test_build.py`. Ingests nested `papers_normalized.jsonl` (source of truth for author→institution nesting) via batched `UNWIND`+`MERGE` (idempotent); applies schema first, then pass 1 = nodes + AUTHORED_BY/WORKS_AT/STUDIES, pass 2 = CITES (after all Papers exist; dst MATCHed not MERGEd so no stray nodes). Flags: `--reset` (DETACH DELETE first), `--batch-size`. Built live: **Paper 5,847 / Author 25,988 / Institution 4,281 / Topic 993** (match M3.3 report) + **AUTHORED_BY 30,613 / WORKS_AT 28,739 / STUDIES 15,949 / CITES 3,232**. Re-run = identical counts (idempotent). Spot-check traversal (Attention Is All You Need): authors→orgs (Gomez→Toronto+Google) + topics correct. pytest 4 passed, ruff clean.
 - [ ] M4.3 — Verify counts (nodes, edges) and spot-check a few traversals in Neo4j Browser
 - [ ] M4.4 — Capture 2–3 graph screenshots for the LinkedIn post
 
@@ -202,6 +203,7 @@ RAG Graph P/
 ## 9. Status Log
 > Append newest entries at the top. Format: `YYYY-MM-DD — what changed — next up`.
 
+- 2026-06-09 — M4.2 done: src/graph/build.py ingests papers_normalized.jsonl → Neo4j (batched UNWIND+MERGE, idempotent). Counts: 5,847 papers / 25,988 authors / 4,281 insts / 993 topics; 30,613 AUTHORED_BY / 28,739 WORKS_AT / 15,949 STUDIES / 3,232 CITES. pytest 4 passed. — Next: M4.3 (verify counts + spot-check traversals in Neo4j Browser).
 - 2026-06-09 — M4.1 done: src/graph/schema.py defines node/edge model + applies 4 uniqueness constraints + 6 property indexes + 1 fulltext index (idempotent, CLI --apply/--show/--drop). Applied to live Neo4j; pytest 5 passed. — Next: M4.2 (ingestion: rows → Paper/Author/Institution/Topic nodes + AUTHORED_BY/WORKS_AT/STUDIES/CITES edges).
 - 2026-06-09 — M3.3 done: src/ingest/export.py flattens papers_normalized.jsonl → data/processed/clean_papers.csv (5,847×18) + data_quality_report.md. pytest 18 passed. **M3 milestone complete.** — Next: M4.1 (Neo4j node/edge schema + uniqueness constraints/indexes).
 - 2026-06-09 — M3.2 done: src/ingest/normalize.py (country-suffix strip + canonical map + safe country-split merge) → data/interim/papers_normalized.jsonl. 32 orgs merged, ambiguous names preserved. pytest 15 passed. — Next: M3.3 (emit data/processed/clean_papers.csv + data-quality report).

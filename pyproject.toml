@@ -17,6 +17,7 @@ dependencies = [
     "langgraph",
     "ollama",
     "ragas",
+    "langchain-ollama",  # M9.2: drive the Ragas judge with a local Ollama model
     "streamlit",
     "python-dotenv",
 ]

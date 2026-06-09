@@ -74,7 +74,7 @@ RAG Graph P/
 │   ├── health.py             # connectivity smoke checks  [M1.3]
 │   ├── ingest/               # download.py [M2.2], audit.py [M2.3], clean.py [M3.1], normalize.py [M3.2], export.py [M3.3]
 │   ├── graph/                # neo4j build + queries  (pending M4)
-│   ├── vector/               # embed.py [M5.1]; qdrant index + search (pending M5.2)
+│   ├── vector/               # embed.py [M5.1], index.py + search.py [M5.2]
 │   ├── retrieval/            # hybrid + router (langgraph)  (pending M7)
 │   ├── llm/                  # ollama wrapper  (pending M8)
 │   └── eval/                 # ragas harness  (pending M9)
@@ -130,7 +130,8 @@ RAG Graph P/
 ### M5 — Vector RAG Baseline
 - [x] M5.1 — Chunk papers (title+abstract) and embed with bge-small
 > ✅ Done: `src/vector/embed.py` + `tests/test_embed.py`. Pure word-window chunker (`title`\n\n`abstract`, max 256 words / 32 overlap; short abstracts → 1 chunk) + bge-small (`BAAI/bge-small-en-v1.5`, 384-dim) via sentence-transformers, L2-normalized so Qdrant cosine==dot (M5.2). Reads `papers_normalized.jsonl`, writes row-aligned `data/processed/chunks.jsonl` (chunk_id/paper_id/chunk_index + metadata + text) and `embeddings.npy`. Built live: **5,847 papers → 6,776 chunks** (929 from 200+-word multi-chunk papers) → vectors `(6776, 384)` float32, all norms 1.0, chunks↔vectors aligned 1:1. CLI: `--limit`/`--no-embed`/`--max-words`/`--overlap`/`--batch-size`. pytest 8 passed (chunking logic; embedding exercised at runtime), ruff clean.
-- [ ] M5.2 — Index into Qdrant; build similarity-search function
+- [x] M5.2 — Index into Qdrant; build similarity-search function
+> ✅ Done: `src/vector/index.py` + `src/vector/search.py` + `tests/test_index.py`. `index.py` upserts the M5.1 chunks+vectors into a cosine collection (point id = row index, idempotent stable ids; `chunk_id`/`paper_id`/`text`+metadata in payload so search hands context straight to the LLM in M8); CLI `--reset`/`--batch-size`. `search.py` = `search(query, k)` that embeds the query with bge's retrieval prefix ("Represent this sentence for searching relevant passages: " — queries only; passages stay prefix-free), L2-normalized, then `query_points` top-k → payload+score; module-cached model, CLI `python src/vector/search.py --k N "..."`. Built live: **6,776 points** in collection `papers`; sanity query "transformer architecture based entirely on attention" → "Attention Is All You Need" + related transformer papers. pytest 4 passed (pure point-building + query-prefix; live Qdrant round-trip = idempotent re-index + nearest-neighbour, skips if Qdrant down) → 42 total, ruff clean.
 - [ ] M5.3 — Wrap as a baseline `vector_rag(query)` that returns context + LLM answer
 - [ ] M5.4 — Confirm baseline works end-to-end on a simple question
 
@@ -206,6 +207,7 @@ RAG Graph P/
 ## 9. Status Log
 > Append newest entries at the top. Format: `YYYY-MM-DD — what changed — next up`.
 
+- 2026-06-09 — M5.2 done: src/vector/index.py upserts 6,776 chunks+vectors into Qdrant cosine collection 'papers' (idempotent row-index ids, payload carries text); src/vector/search.py = search(query,k) with bge query prefix → query_points top-k. Sanity query returns "Attention Is All You Need". pytest 4 passed (42 total). — Next: M5.3 (wrap as vector_rag(query) returning context + LLM answer).
 - 2026-06-09 — M5.1 done: src/vector/embed.py chunks title+abstract (word-window, 256/32) and embeds with bge-small (384-dim, L2-normalized) → data/processed/chunks.jsonl + embeddings.npy. Built: 5,847 papers → 6,776 chunks → vectors (6776, 384), aligned 1:1. pytest 8 passed (38 total). — Next: M5.2 (index chunks+vectors into Qdrant; build similarity-search function).
 - 2026-06-09 — M4.4 done (manual): captured Neo4j Browser screenshots for the LinkedIn post using verify.py's Cypher. **M4 milestone complete.** — Next: M5.1 (chunk papers title+abstract, embed with bge-small).
 - 2026-06-09 — M4.3 done: src/graph/verify.py independently recomputes expected counts from JSONL and diffs vs. live graph — all 8 node/edge counts match; integrity clean (0 dup/self-cite/title-less); spot-check traversals OK; prints Browser Cypher for M4.4. pytest 3 passed. — Next: M4.4 (manual: capture 2–3 Neo4j Browser screenshots for the LinkedIn post), then M5.1 (chunk+embed papers with bge-small).

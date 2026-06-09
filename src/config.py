@@ -26,6 +26,10 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3")
 # --- Embeddings ---
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
 
+# --- OpenAlex (data source; see docs/data-source.md) ---
+OPENALEX_BASE_URL = os.getenv("OPENALEX_BASE_URL", "https://api.openalex.org/works")
+OPENALEX_MAILTO = os.getenv("OPENALEX_MAILTO", "shayanx13@gmail.com")  # polite pool
+
 # --- Data paths ---
 DATA_RAW = os.getenv("DATA_RAW", "data/raw")
 DATA_PROCESSED = os.getenv("DATA_PROCESSED", "data/processed")

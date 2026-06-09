@@ -97,7 +97,8 @@ graphrag-discovery/
 ### M2 — Data Collection
 - [x] M2.1 — Pick exact source (arXiv metadata snapshot / Kaggle / HF dataset) and document the choice
 > ✅ Done: Chose **OpenAlex** (CC0, no API key, polite-pool `mailto`), focused NLP subfield. Documented in `docs/data-source.md` with reproducible filter `concepts.id:C204321447,from_publication_date:2024-01-01,cited_by_count:>10` (verified **5,847 works**), field→schema mapping, and two transforms (reconstruct inverted-index abstracts; keep in-corpus CITES for density). Verified live: API reachable, all required fields present.
-- [ ] M2.2 — Download script → `data/raw/`; cache so it isn't re-downloaded
+- [x] M2.2 — Download script → `data/raw/`; cache so it isn't re-downloaded
+> ✅ Done: `src/ingest/download.py` (stdlib urllib, cursor pagination, polite-pool mailto, 429/5xx retry/backoff, `--force`/`--max-records` flags) + `tests/test_download.py` (no-network). OpenAlex settings added to `config.py`/`.env.example`. Pulled **5,847 works** → `data/raw/openalex/works.jsonl` (55MB, gitignored) + `manifest.json`. Cache verified (re-run skips). Sample (Attention Is All You Need): 8 authors, 3 topics, 28 refs, abstract present.
 - [ ] M2.3 — Sanity-check schema: confirm fields for paper_id, title, authors, institution, topic, citations exist (or plan derivations)
 
 ### M3 — Data Cleaning
@@ -186,6 +187,7 @@ graphrag-discovery/
 ## 9. Status Log
 > Append newest entries at the top. Format: `YYYY-MM-DD — what changed — next up`.
 
+- 2026-06-09 — M2.2 done: src/ingest/download.py (cached, cursor-paginated, retry) pulled 5,847 OpenAlex works → data/raw/openalex/works.jsonl (55MB) + manifest. pytest 6 passed. — Next: M2.3 (sanity-check schema: confirm/plan fields for paper/author/institution/topic/citations).
 - 2026-06-09 — M2.1 done: data source = OpenAlex, focused NLP subset (~5.8k), documented in docs/data-source.md; API + fields verified live. — Next: M2.2 (download script → data/raw/, cached).
 - 2026-06-09 — M1.4 done: README.md (overview, architecture, setup, layout, commands, Python 3.11/3.12 venv note). **M1 milestone complete.** — Next: M2.1 (pick + document the dataset source).
 - 2026-06-09 — M1.3 done: src/health.py + tests/test_connections.py (all 3 services ping OK), pulled qwen3:0.6b smoke model. pytest 4 passed. — Next: M1.4 (README skeleton + setup instructions; include Python 3.11/3.12 venv note).

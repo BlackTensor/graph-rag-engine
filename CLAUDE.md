@@ -95,7 +95,8 @@ graphrag-discovery/
 > ✅ Done: `README.md` with overview, architecture diagram, tech stack, prerequisites, 4-step setup (docker → venv → pull model → verify), config/layout/commands sections, and TBD Results/Demo placeholders. Includes the Python 3.11/3.12 venv note (torch/ragas wheels) as requested.
 
 ### M2 — Data Collection
-- [ ] M2.1 — Pick exact source (arXiv metadata snapshot / Kaggle / HF dataset) and document the choice
+- [x] M2.1 — Pick exact source (arXiv metadata snapshot / Kaggle / HF dataset) and document the choice
+> ✅ Done: Chose **OpenAlex** (CC0, no API key, polite-pool `mailto`), focused NLP subfield. Documented in `docs/data-source.md` with reproducible filter `concepts.id:C204321447,from_publication_date:2024-01-01,cited_by_count:>10` (verified **5,847 works**), field→schema mapping, and two transforms (reconstruct inverted-index abstracts; keep in-corpus CITES for density). Verified live: API reachable, all required fields present.
 - [ ] M2.2 — Download script → `data/raw/`; cache so it isn't re-downloaded
 - [ ] M2.3 — Sanity-check schema: confirm fields for paper_id, title, authors, institution, topic, citations exist (or plan derivations)
 
@@ -185,6 +186,7 @@ graphrag-discovery/
 ## 9. Status Log
 > Append newest entries at the top. Format: `YYYY-MM-DD — what changed — next up`.
 
+- 2026-06-09 — M2.1 done: data source = OpenAlex, focused NLP subset (~5.8k), documented in docs/data-source.md; API + fields verified live. — Next: M2.2 (download script → data/raw/, cached).
 - 2026-06-09 — M1.4 done: README.md (overview, architecture, setup, layout, commands, Python 3.11/3.12 venv note). **M1 milestone complete.** — Next: M2.1 (pick + document the dataset source).
 - 2026-06-09 — M1.3 done: src/health.py + tests/test_connections.py (all 3 services ping OK), pulled qwen3:0.6b smoke model. pytest 4 passed. — Next: M1.4 (README skeleton + setup instructions; include Python 3.11/3.12 venv note).
 - 2026-06-09 — M1.2 done: docker-compose (Neo4j+APOC, Qdrant, Ollama) with healthchecks + named volumes; all containers verified healthy (qdrant /readyz=200). — Next: M1.3 (connection smoke tests + pull an Ollama model).

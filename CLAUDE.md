@@ -99,7 +99,8 @@ graphrag-discovery/
 > ✅ Done: Chose **OpenAlex** (CC0, no API key, polite-pool `mailto`), focused NLP subfield. Documented in `docs/data-source.md` with reproducible filter `concepts.id:C204321447,from_publication_date:2024-01-01,cited_by_count:>10` (verified **5,847 works**), field→schema mapping, and two transforms (reconstruct inverted-index abstracts; keep in-corpus CITES for density). Verified live: API reachable, all required fields present.
 - [x] M2.2 — Download script → `data/raw/`; cache so it isn't re-downloaded
 > ✅ Done: `src/ingest/download.py` (stdlib urllib, cursor pagination, polite-pool mailto, 429/5xx retry/backoff, `--force`/`--max-records` flags) + `tests/test_download.py` (no-network). OpenAlex settings added to `config.py`/`.env.example`. Pulled **5,847 works** → `data/raw/openalex/works.jsonl` (55MB, gitignored) + `manifest.json`. Cache verified (re-run skips). Sample (Attention Is All You Need): 8 authors, 3 topics, 28 refs, abstract present.
-- [ ] M2.3 — Sanity-check schema: confirm fields for paper_id, title, authors, institution, topic, citations exist (or plan derivations)
+- [x] M2.3 — Sanity-check schema: confirm fields for paper_id, title, authors, institution, topic, citations exist (or plan derivations)
+> ✅ Done: `src/ingest/audit.py` + `tests/test_audit.py`. Coverage over 5,847 works: paper_id 100% (0 dupes), title 100%, year 100%, **abstract 77.2%** (use title when missing), authors 99.5% (25,988 distinct), authorships-with-institution 82.0% (4,389 institutions), topics 99.9% (993 distinct). **CITES is sparse**: 270,302 ref edges but only **1.2% (3,282) are in-corpus** (~26% papers cite in-corpus, ~28% cited). Derivations for M3: strip URL→short id; reconstruct inverted-index abstracts (fallback to title); normalize institution display_names. See Open Questions for the CITES-density decision (M4).
 
 ### M3 — Data Cleaning
 - [ ] M3.1 — Dedupe (`drop_duplicates`), handle missing values
@@ -187,6 +188,7 @@ graphrag-discovery/
 ## 9. Status Log
 > Append newest entries at the top. Format: `YYYY-MM-DD — what changed — next up`.
 
+- 2026-06-09 — M2.3 done: src/ingest/audit.py coverage report. All core fields well-covered EXCEPT in-corpus citations (1.2%, 3,282 edges) — flagged as Open Question for M4. pytest 8 passed. **M2 milestone complete.** — Next: M3.1 (dedupe + missing-value handling).
 - 2026-06-09 — M2.2 done: src/ingest/download.py (cached, cursor-paginated, retry) pulled 5,847 OpenAlex works → data/raw/openalex/works.jsonl (55MB) + manifest. pytest 6 passed. — Next: M2.3 (sanity-check schema: confirm/plan fields for paper/author/institution/topic/citations).
 - 2026-06-09 — M2.1 done: data source = OpenAlex, focused NLP subset (~5.8k), documented in docs/data-source.md; API + fields verified live. — Next: M2.2 (download script → data/raw/, cached).
 - 2026-06-09 — M1.4 done: README.md (overview, architecture, setup, layout, commands, Python 3.11/3.12 venv note). **M1 milestone complete.** — Next: M2.1 (pick + document the dataset source).
@@ -200,4 +202,4 @@ graphrag-discovery/
 ## 10. Open Questions
 > Claude logs blockers/decisions needing the user here.
 
-- (none yet)
+- **[M4] CITES density is low.** Only 1.2% of references (3,282 edges) point within the 5,847-paper corpus; most references go to pre-2024 / sub-threshold papers. Decision needed before/at M4: (a) keep in-corpus CITES only (3,282 edges; lean on author/topic/institution multi-hop, which has 82–99% coverage), or (b) backfill externally-cited works as lightweight `Paper` stubs (id + optionally fetched title) to enrich citation-based multi-hop. Leaning (a) for v1 simplicity; revisit if the demo needs deeper citation chains.

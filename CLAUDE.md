@@ -105,7 +105,8 @@ graphrag-discovery/
 ### M3 — Data Cleaning
 - [x] M3.1 — Dedupe (`drop_duplicates`), handle missing values
 > ✅ Done: `src/ingest/clean.py` + `tests/test_clean.py`. Parses raw Works → normalized paper records, dedupes by paper_id (`drop_duplicates`), reconstructs inverted-index abstracts (falls back to title), keeps **in-corpus CITES only** (decision (a)). Out → `data/interim/papers_clean.jsonl` (5,847 papers; 0 dupes, 0 missing title, 1,334 abstracts filled from title, 69 papers w/ no valid author, 3,232 in-corpus CITES edges). pytest 11 passed.
-- [ ] M3.2 — Normalize entity names (e.g. "Open AI"/"openai" → "OpenAI") with a canonical-name map
+- [x] M3.2 — Normalize entity names (e.g. "Open AI"/"openai" → "OpenAI") with a canonical-name map
+> ✅ Done: `src/ingest/normalize.py` + `tests/test_normalize.py`. Strips trailing `(Country)` from institution names (recognized-country list, so campus tags like `(Beijing)` survive), applies `CANONICAL_NAME_MAP` (open ai→OpenAI extension point), and **merges ids only for pure country-suffix splits** (Google 5→1, Microsoft 8→1; ambiguous same-name like Northeastern University kept separate). In→`papers_clean.jsonl`, out→`data/interim/papers_normalized.jsonl`. Stats: 2,085 suffixes stripped, 32 orgs merged (4,338→4,281 inst ids), 21 canonical-map hits. pytest 15 passed.
 - [ ] M3.3 — Emit `data/processed/clean_papers.csv` + a short data-quality report
 
 ### M4 — Knowledge Graph (Neo4j)
@@ -189,6 +190,7 @@ graphrag-discovery/
 ## 9. Status Log
 > Append newest entries at the top. Format: `YYYY-MM-DD — what changed — next up`.
 
+- 2026-06-09 — M3.2 done: src/ingest/normalize.py (country-suffix strip + canonical map + safe country-split merge) → data/interim/papers_normalized.jsonl. 32 orgs merged, ambiguous names preserved. pytest 15 passed. — Next: M3.3 (emit data/processed/clean_papers.csv + data-quality report).
 - 2026-06-09 — M3.1 done: src/ingest/clean.py dedupe + missing-value handling → data/interim/papers_clean.jsonl (5,847). CITES decision (a) adopted (in-corpus only). pytest 11 passed. — Next: M3.2 (normalize entity names via canonical-name map).
 - 2026-06-09 — M2.3 done: src/ingest/audit.py coverage report. All core fields well-covered EXCEPT in-corpus citations (1.2%, 3,282 edges) — flagged as Open Question for M4. pytest 8 passed. **M2 milestone complete.** — Next: M3.1 (dedupe + missing-value handling).
 - 2026-06-09 — M2.2 done: src/ingest/download.py (cached, cursor-paginated, retry) pulled 5,847 OpenAlex works → data/raw/openalex/works.jsonl (55MB) + manifest. pytest 6 passed. — Next: M2.3 (sanity-check schema: confirm/plan fields for paper/author/institution/topic/citations).

@@ -91,8 +91,8 @@ graphrag-discovery/
 > ✅ Done: `docker-compose.yml` with Neo4j 5 (+APOC, ports 7474/7687), Qdrant (6333/6334), Ollama (11434), named volumes, healthchecks (neo4j cypher-shell, ollama `ollama list`). Verified: `docker compose up -d` → neo4j & ollama `(healthy)`, qdrant `/readyz` → 200. Qdrant has no in-container healthcheck (image lacks curl/wget); checked from host.
 - [x] M1.3 — Connection smoke tests (ping Neo4j, Qdrant, Ollama; pull one Ollama model)
 > ✅ Done: `src/health.py` (lazy-import pings for all 3, `python src/health.py`, exit 0/1) + `tests/test_connections.py` (skips if a service is down). Pulled `qwen3:0.6b` (small smoke model; production model choice deferred to M8.3). Verified: all 3 OK, `pytest` 4 passed, ruff clean.
-- [ ] M1.4 — Write `README.md` skeleton + setup instructions
-> 📝 Reminder: README must note that runtime deps (torch via sentence-transformers, ragas) may lack wheels on Python 3.14 — recommend a Python 3.11/3.12 venv for `pip install -e ".[dev]"`.
+- [x] M1.4 — Write `README.md` skeleton + setup instructions
+> ✅ Done: `README.md` with overview, architecture diagram, tech stack, prerequisites, 4-step setup (docker → venv → pull model → verify), config/layout/commands sections, and TBD Results/Demo placeholders. Includes the Python 3.11/3.12 venv note (torch/ragas wheels) as requested.
 
 ### M2 — Data Collection
 - [ ] M2.1 — Pick exact source (arXiv metadata snapshot / Kaggle / HF dataset) and document the choice
@@ -185,6 +185,7 @@ graphrag-discovery/
 ## 9. Status Log
 > Append newest entries at the top. Format: `YYYY-MM-DD — what changed — next up`.
 
+- 2026-06-09 — M1.4 done: README.md (overview, architecture, setup, layout, commands, Python 3.11/3.12 venv note). **M1 milestone complete.** — Next: M2.1 (pick + document the dataset source).
 - 2026-06-09 — M1.3 done: src/health.py + tests/test_connections.py (all 3 services ping OK), pulled qwen3:0.6b smoke model. pytest 4 passed. — Next: M1.4 (README skeleton + setup instructions; include Python 3.11/3.12 venv note).
 - 2026-06-09 — M1.2 done: docker-compose (Neo4j+APOC, Qdrant, Ollama) with healthchecks + named volumes; all containers verified healthy (qdrant /readyz=200). — Next: M1.3 (connection smoke tests + pull an Ollama model).
 - 2026-06-09 — M1.1 done: repo scaffold (src/ skeleton, pyproject, ruff+pytest, config.py, .env.example, .gitignore). SDD skipped (CLAUDE.md serves as design doc). ruff/pytest green. — Next: M1.2 (docker-compose: Neo4j + Qdrant + Ollama).

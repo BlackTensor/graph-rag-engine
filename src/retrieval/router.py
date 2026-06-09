@@ -7,9 +7,9 @@ which one a question needs and routes it through a small LangGraph state machine
 
         ┌──────────┐   route == "vector"   ┌──────────┐
         │          │──────────────────────▶│  vector  │
-   ▶───▶│ classify │   route == "graph"    ├──────────┤───▶ END
-        │          │──────────────────────▶│  graph   │
-        └──────────┘   route == "hybrid"   ├──────────┤
+   ▶───▶│ classify │   route == "graph"    ├──────────┤     ┌───────┐
+        │          │──────────────────────▶│  graph   │────▶│ merge │──▶ END
+        └──────────┘   route == "hybrid"   ├──────────┤     └───────┘
                                            │  hybrid  │
                                            └──────────┘
 
@@ -26,10 +26,10 @@ Two layers of decision, by design:
      resolves), it falls back to vector retrieval so the question is still
      answered. This is the safety net that makes lenient graph routing safe.
 
-Scope (M7.1): this builds the **router** — it classifies and runs the chosen
-retriever(s), populating the retrieval results in state. Cleanly *merging* graph
-+ vector context is M7.2; writing the final grounded answer is M7.3. So the
-nodes here stop at retrieval.
+After the chosen retriever(s) run, a `merge` node (M7.2, `retrieval/merge.py`)
+combines graph + vector context into one deduped, prompt-ready block in
+`merged_context`. Writing the final grounded answer from it is M7.3 — the nodes
+here stop at retrieval + merge.
 
     python src/retrieval/router.py "Which institutions collaborate most with Tsinghua University?"
     python src/retrieval/router.py "What is the Transformer architecture?"
@@ -47,6 +47,7 @@ from typing import Optional, TypedDict
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from graph import retrieve  # noqa: E402
+from retrieval import merge  # noqa: E402
 from vector import search  # noqa: E402
 
 DEFAULT_K = 5
@@ -173,6 +174,9 @@ class RouterState(TypedDict, total=False):
     graph_result    — full graph_retrieve(...) output, or None.
     vector_contexts — search(...) hits, or None.
     fellback        — True if the graph node abstained and used vector instead.
+    merged_context  — combined, deduped, prompt-ready context (set by `merge`).
+    passages        — deduped vector passages (one per paper) behind the context.
+    dropped         — raw vector chunks removed by dedupe.
     """
 
     query: str
@@ -182,6 +186,9 @@ class RouterState(TypedDict, total=False):
     graph_result: Optional[dict]
     vector_contexts: Optional[list]
     fellback: bool
+    merged_context: str
+    passages: list[dict]
+    dropped: int
 
 
 def classify_node(state: RouterState) -> dict:
@@ -226,6 +233,16 @@ def hybrid_node(state: RouterState) -> dict:
     }
 
 
+def merge_node(state: RouterState) -> dict:
+    """Combine graph + vector context into one deduped, prompt-ready block (M7.2)."""
+    merged = merge.merge_context(state.get("graph_result"), state.get("vector_contexts"))
+    return {
+        "merged_context": merged.text,
+        "passages": merged.passages,
+        "dropped": merged.dropped,
+    }
+
+
 def _select_route(state: RouterState) -> str:
     return state["route"]
 
@@ -239,6 +256,7 @@ def build_router():
     graph.add_node("vector", vector_node)
     graph.add_node("graph", graph_node)
     graph.add_node("hybrid", hybrid_node)
+    graph.add_node("merge", merge_node)
 
     graph.add_edge(START, "classify")
     graph.add_conditional_edges(
@@ -246,9 +264,11 @@ def build_router():
         _select_route,
         {"vector": "vector", "graph": "graph", "hybrid": "hybrid"},
     )
-    graph.add_edge("vector", END)
-    graph.add_edge("graph", END)
-    graph.add_edge("hybrid", END)
+    # Every retrieval branch funnels through the merge step before finishing.
+    graph.add_edge("vector", "merge")
+    graph.add_edge("graph", "merge")
+    graph.add_edge("hybrid", "merge")
+    graph.add_edge("merge", END)
     return graph.compile()
 
 
@@ -282,20 +302,11 @@ def main() -> int:
     print(f"executed: {', '.join(state.get('executed') or ['(none)'])}")
     if state.get("fellback"):
         print("note: graph abstained -> fell back to vector")
+    if state.get("dropped"):
+        print(f"deduped: dropped {state['dropped']} redundant chunk(s)")
 
-    g = state.get("graph_result")
-    if g and g.get("template"):
-        print(
-            f"\ngraph: seed {g['seed_type']} = {g['seed_name']!r} "
-            f"-> {g['template']} ({len(g['rows'])} rows)"
-        )
-        print(g["context"])
-
-    contexts = state.get("vector_contexts")
-    if contexts:
-        print("\nvector passages:")
-        for rank, c in enumerate(contexts, 1):
-            print(f"  [{rank}] ({c['score']:.4f}) {c.get('title', '')}")
+    print("\n--- merged context ---")
+    print(state.get("merged_context", "(none)"))
     return 0
 
 

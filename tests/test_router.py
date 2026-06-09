@@ -88,6 +88,9 @@ def test_route_vector_question_runs_only_vector(fake_retrievers):
     assert state["route"] == "vector"
     assert state["executed"] == ["vector"]
     assert state["vector_contexts"]
+    # merge node ran: vector-only context, no graph section
+    assert "Document passages:" in state["merged_context"]
+    assert "Knowledge-graph facts:" not in state["merged_context"]
     assert fake_retrievers == {"graph": 0, "vector": 1}
 
 
@@ -96,6 +99,8 @@ def test_route_graph_question_runs_only_graph(fake_retrievers):
     assert state["route"] == "graph"
     assert state["executed"] == ["graph"]
     assert state["graph_result"]["template"] == "collaborating_institutions"
+    # merge node ran: graph-only context
+    assert "Knowledge-graph facts:" in state["merged_context"]
     assert fake_retrievers == {"graph": 1, "vector": 0}
 
 
@@ -114,6 +119,9 @@ def test_route_hybrid_runs_both(fake_retrievers):
     assert state["route"] == "hybrid"
     assert state["executed"] == ["graph", "vector"]
     assert state["graph_result"] and state["vector_contexts"]
+    # merge node ran: both sections present in one block
+    assert "Knowledge-graph facts:" in state["merged_context"]
+    assert "Document passages:" in state["merged_context"]
     assert fake_retrievers == {"graph": 1, "vector": 1}
 
 

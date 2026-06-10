@@ -43,6 +43,7 @@ QUESTIONS_PATH = os.path.join(
     "eval", "questions.jsonl",
 )
 RUNS_CACHE = os.path.join(config.DATA_PROCESSED, "eval_runs.jsonl")
+RETRIEVAL_CACHE = os.path.join(config.DATA_PROCESSED, "retrieval_eval.jsonl")
 SCORES_CSV = os.path.join(config.DATA_PROCESSED, "eval_scores.csv")
 
 # The Ragas metrics we report, mapped to M9.3's "accuracy / precision / recall /
@@ -114,6 +115,41 @@ PIPELINES = {
 }
 
 
+# --- retrieval-only adapters (no LLM, just context — fast path for M9.3) ------
+
+def _vector_retrieval_only(query: str, k: int = 5) -> dict:
+    from vector.search import search  # noqa: PLC0415
+
+    hits = search(query, k=k)
+    contexts = [
+        f"{h.get('title', '')}\n{h.get('text', '')}".strip() for h in hits
+    ]
+    return {"answer": "", "contexts": contexts, "diag": {}}
+
+
+def _graph_retrieval_only(query: str, k: int = 15) -> dict:
+    from graph.retrieve import graph_retrieve  # noqa: PLC0415
+
+    res = graph_retrieve(query, limit=k)
+    if res["rows"]:
+        contexts = [
+            ", ".join(f"{kk}={vv}" for kk, vv in row.items()) for row in res["rows"]
+        ]
+    else:
+        contexts = [res["context"]]
+    return {
+        "answer": "",
+        "contexts": contexts,
+        "diag": {"template": res["template"], "seed_name": res.get("seed_name")},
+    }
+
+
+RETRIEVAL_PIPELINES = {
+    "vector": _vector_retrieval_only,
+    "graph": _graph_retrieval_only,
+}
+
+
 # --- generation (cached) ------------------------------------------------------
 
 def _cache_key(qid: str, pipeline: str) -> str:
@@ -133,12 +169,14 @@ def _load_cache(path: str) -> dict[str, dict]:
 
 
 def generate(questions: list[dict], pipelines: list[str], k: int = 5,
-             cache_path: str = RUNS_CACHE, regen: bool = False) -> list[dict]:
+             cache_path: str = RUNS_CACHE, regen: bool = False,
+             pipeline_dict: dict | None = None) -> list[dict]:
     """Run each pipeline over each question; cache to JSONL and reuse.
 
     Returns one run record per (question, pipeline) with the answer, retrieved
     contexts, and the question's gold fields carried through for scoring.
     """
+    runners = pipeline_dict if pipeline_dict is not None else PIPELINES
     cache = {} if regen else _load_cache(cache_path)
     os.makedirs(os.path.dirname(cache_path), exist_ok=True)
     records: list[dict] = []
@@ -151,7 +189,7 @@ def generate(questions: list[dict], pipelines: list[str], k: int = 5,
                 if key in cache:
                     records.append(cache[key])
                     continue
-                out = PIPELINES[name](q["question"], k=k)
+                out = runners[name](q["question"], k=k)
                 rec = {
                     "id": q["id"],
                     "split": q["split"],
@@ -358,12 +396,19 @@ def _print_table(agg: list[dict], metric_cols: list[str]) -> None:
 # --- CLI ----------------------------------------------------------------------
 
 def run(limit: int | None, pipelines: list[str], metric_names: list[str],
-        k: int, regen: bool, use_ragas: bool, split: str) -> list[dict]:
+        k: int, regen: bool, use_ragas: bool, split: str,
+        retrieval_only: bool = False) -> list[dict]:
     """Full harness: load -> generate -> score -> aggregate. Returns scored recs."""
     questions = load_questions(limit=limit, split=split)
+    mode = "retrieval-only" if retrieval_only else "generation"
     print(f"Evaluating {len(questions)} questions x {len(pipelines)} pipelines "
-          f"({', '.join(pipelines)})", file=sys.stderr)
-    records = generate(questions, pipelines, k=k, regen=regen)
+          f"({', '.join(pipelines)}) [{mode}]", file=sys.stderr)
+    if retrieval_only:
+        records = generate(questions, pipelines, k=k, regen=regen,
+                           cache_path=RETRIEVAL_CACHE,
+                           pipeline_dict=RETRIEVAL_PIPELINES)
+    else:
+        records = generate(questions, pipelines, k=k, regen=regen)
 
     det_cols = ["context_entity_recall", "answer_entity_recall"]
     for r in records:
@@ -376,11 +421,14 @@ def run(limit: int | None, pipelines: list[str], metric_names: list[str],
             r.update(rag_out.get(i, {}))
         metric_cols += [m for m in metric_names if m in RAGAS_METRICS]
 
-    _write_csv(records, metric_cols, SCORES_CSV)
+    out_csv = SCORES_CSV if not retrieval_only else os.path.join(
+        config.DATA_PROCESSED, "retrieval_eval_scores.csv"
+    )
+    _write_csv(records, metric_cols, out_csv)
     agg = aggregate(records, metric_cols)
     print()
     _print_table(agg, metric_cols)
-    print(f"\nPer-question scores -> {SCORES_CSV}", file=sys.stderr)
+    print(f"\nPer-question scores -> {out_csv}", file=sys.stderr)
     return records
 
 
@@ -393,6 +441,8 @@ def main() -> int:
     p.add_argument("--split", default="all", choices=["all", "easy", "multi_hop"])
     p.add_argument("--regen", action="store_true", help="ignore generation cache")
     p.add_argument("--no-ragas", action="store_true", help="deterministic metrics only")
+    p.add_argument("--retrieval-only", action="store_true",
+                   help="skip LLM generation; compute context_entity_recall only (fast)")
     args = p.parse_args()
 
     run(
@@ -401,8 +451,9 @@ def main() -> int:
         metric_names=[s.strip() for s in args.metrics.split(",") if s.strip()],
         k=args.k,
         regen=args.regen,
-        use_ragas=not args.no_ragas,
+        use_ragas=not args.no_ragas and not args.retrieval_only,
         split=args.split,
+        retrieval_only=args.retrieval_only,
     )
     return 0
 

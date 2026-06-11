@@ -18,6 +18,10 @@ venv/
 .idea/
 .DS_Store
 
+# Claude Code
+CLAUDE.md
+.claude/
+
 # Data artifacts (keep the dir placeholders)
 data/raw/*
 data/interim/*
